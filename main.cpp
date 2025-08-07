@@ -466,6 +466,7 @@ private:
     bool showTree;
     bool useTimeLimit;
     bool enableMoveAnalysis;
+    bool debugMode; // Untuk menampilkan debug info
     
     int pieceValues[7] = {0, 100, 320, 330, 500, 900, 20000};
     
@@ -487,7 +488,7 @@ private:
 
 public:
     ChessEngine() : nodesSearched(0), timeLimit(5000), maxDepth(5), showTree(false), 
-                    useTimeLimit(true), enableMoveAnalysis(true), lastEvaluation(0) {}
+                    useTimeLimit(true), enableMoveAnalysis(true), debugMode(false), lastEvaluation(0) {}
     
     void showConfig() const {
         cout << "\n📊 KONFIGURASI ENGINE" << endl;
@@ -497,6 +498,7 @@ public:
         cout << "• Mode waktu          : " << (useTimeLimit ? "Aktif" : "Non-aktif") << endl;
         cout << "• Tampilkan tree      : " << (showTree ? "Ya" : "Tidak") << endl;
         cout << "• Analisis gerakan    : " << (enableMoveAnalysis ? "Aktif" : "Non-aktif") << endl;
+        cout << "• Debug mode          : " << (debugMode ? "Aktif" : "Non-aktif") << endl;
         cout << "═══════════════════════\n" << endl;
     }
     
@@ -510,11 +512,12 @@ public:
             cout << "3. Toggle mode waktu (" << (useTimeLimit ? "Aktif" : "Non-aktif") << ")" << endl;
             cout << "4. Toggle tampilan tree (" << (showTree ? "Ya" : "Tidak") << ")" << endl;
             cout << "5. Toggle analisis gerakan (" << (enableMoveAnalysis ? "Aktif" : "Non-aktif") << ")" << endl;
-            cout << "6. Lihat riwayat analisis" << endl;
-            cout << "7. Reset ke default" << endl;
-            cout << "8. Kembali ke permainan" << endl;
+            cout << "6. Toggle debug mode (" << (debugMode ? "Aktif" : "Non-aktif") << ")" << endl;
+            cout << "7. Lihat riwayat analisis" << endl;
+            cout << "8. Reset ke default" << endl;
+            cout << "9. Kembali ke permainan" << endl;
             cout << "════════════════════" << endl;
-            cout << "Pilih (1-8): ";
+            cout << "Pilih (1-9): ";
             
             if (!(cin >> choice)) {
                 cin.clear();
@@ -568,17 +571,25 @@ public:
                     }
                     break;
                 case 6:
-                    showMoveHistory();
+                    debugMode = !debugMode;
+                    cout << "✓ Debug mode: " << (debugMode ? "Aktif" : "Non-aktif") << endl;
+                    if (debugMode) {
+                        cout << "🔍 Debug info akan ditampilkan untuk analisis gerakan!" << endl;
+                    }
                     break;
                 case 7:
+                    showMoveHistory();
+                    break;
+                case 8:
                     maxDepth = 5;
                     timeLimit = 5000;
                     useTimeLimit = true;
                     showTree = false;
                     enableMoveAnalysis = true;
+                    debugMode = false;
                     cout << "✓ Konfigurasi di-reset ke default" << endl;
                     break;
-                case 8:
+                case 9:
                     return;
                 default:
                     cout << "❌ Pilihan tidak valid!" << endl;
@@ -657,49 +668,54 @@ public:
         string badge = "";
         string description = "";
         
-        // Konversi score difference (negative berarti buruk untuk pemain)
-        int centipawns = -scoreDiff; // Negatif karena scoreDiff adalah dari perspektif engine
+        // scoreDiff: positif = bagus untuk pemain, negatif = buruk untuk pemain
+        int centipawns = scoreDiff; // Tidak perlu negate lagi
         
-        if (rank == 1 && totalMoves > 3 && (centipawns > 150 || (isCapture && centipawns > 50))) {
-            // Brilliant: Gerakan terbaik DAN memberikan keuntungan signifikan
-            badge = "🔥 Brilliant!!";
-            description = "Gerakan luar biasa yang memberikan keuntungan besar!";
+        // Debug print untuk memahami nilai
+        if (debugMode) {
+            cout << "Debug analyzeMoveQuality - scoreDiff: " << scoreDiff << ", centipawns: " << centipawns << ", rank: " << rank << "/" << totalMoves << endl;
         }
-        else if (rank == 1) {
-            // Best move
-            badge = "⭐ Best!";
-            description = "Gerakan terbaik dalam posisi ini";
+        
+        if (rank == 1) {
+            // Best move - selalu rank #1
+            if (centipawns > 200) {
+                badge = "🔥 Brilliant!!";
+                description = "Gerakan luar biasa dengan keuntungan besar!";
+            } else {
+                badge = "⭐ Best!";
+                description = "Gerakan terbaik dalam posisi ini";
+            }
         }
         else if (rank <= 2 && centipawns >= -15) {
-            // Great move (ranking 1-2 dan dalam 15 centipawn)
+            // Great move (ranking 1-2 dan tidak kehilangan banyak)
             badge = "✨ Great";
             description = "Gerakan sangat baik";
         }
-        else if (rank <= 3 && centipawns >= -35) {
-            // Good move (ranking 1-3 dan dalam 35 centipawn)
+        else if (rank <= 3 && centipawns >= -25) {
+            // Good move (ranking 1-3 dan tidak kehilangan banyak)
             badge = "✓ Good";
             description = "Gerakan baik";
         }
-        else if (centipawns >= -80) {
-            // Inaccuracy (kehilangan 35-80 centipawn)
+        else if (centipawns >= -50) {
+            // Inaccuracy (kehilangan 25-50 centipawn)
             badge = "❓ Inaccuracy";
-            description = "Gerakan kurang tepat (-" + to_string(-centipawns) + " cp)";
+            description = "Gerakan kurang tepat (" + to_string(-centipawns) + " cp)";
         }
-        else if (centipawns >= -200) {
-            // Mistake (kehilangan 80-200 centipawn)
+        else if (centipawns >= -150) {
+            // Mistake (kehilangan 50-150 centipawn)
             badge = "❗ Mistake";
-            description = "Kesalahan (-" + to_string(-centipawns) + " cp)";
+            description = "Kesalahan (" + to_string(-centipawns) + " cp)";
         }
         else {
-            // Blunder (kehilangan >200 centipawn)
+            // Blunder (kehilangan >150 centipawn)
             badge = "💥 Blunder";
-            description = "Kesalahan besar (-" + to_string(-centipawns) + " cp)";
+            description = "Kesalahan besar (" + to_string(-centipawns) + " cp)";
         }
         
         // Tambahan untuk gerakan khusus
-        if (isCapture && centipawns >= -50) {
+        if (isCapture && centipawns >= 0) {
             description += " [good capture]";
-        } else if (isCapture && centipawns < -100) {
+        } else if (isCapture && centipawns < -50) {
             description += " [bad capture]";
         }
         
@@ -707,8 +723,8 @@ public:
             description += " [effective check]";
         }
         
-        // Tambahan untuk ranking
-        if (rank > totalMoves * 0.8) {
+        // Tambahan untuk ranking yang tidak biasa
+        if (rank > totalMoves * 0.7) {
             description += " [unusual choice]";
         }
         
@@ -719,47 +735,63 @@ public:
         vector<Move> allMoves = board.generateLegalMoves();
         vector<pair<int, Move>> moveScores;
         
-        // Evaluasi semua gerakan
+        // Evaluasi semua gerakan dari perspektif current player
         for (const Move& move : allMoves) {
             ChessBoard testBoard = board;
             testBoard.makeMove(move);
-            int score = -evaluateBoard(testBoard); // Negative karena perspektif berubah
+            // Evaluasi dari perspektif lawan, jadi negate untuk perspektif current player
+            int score = -evaluateBoard(testBoard);
             moveScores.push_back({score, move});
         }
         
-        // Urutkan berdasarkan score (tertinggi dulu)
+        // Urutkan berdasarkan score (tertinggi dulu = terbaik untuk current player)
         sort(moveScores.begin(), moveScores.end(), [](const auto& a, const auto& b) {
             return a.first > b.first;
         });
+        
+        // Debug: tampilkan beberapa top moves
+        if (debugMode) {
+            cout << "Debug rankMove - Top 5 moves:" << endl;
+            for (int i = 0; i < min(5, (int)moveScores.size()); i++) {
+                cout << "#" << (i+1) << ": " << moveScores[i].second.toString() << " (score: " << moveScores[i].first << ")" << endl;
+            }
+        }
         
         // Cari ranking gerakan pemain
         for (size_t i = 0; i < moveScores.size(); i++) {
             if (moveScores[i].second.from == playerMove.from && 
                 moveScores[i].second.to == playerMove.to) {
+                if (debugMode) {
+                    cout << "Debug - Player move " << playerMove.toString() << " ranked #" << (i+1) << " with score " << moveScores[i].first << endl;
+                }
                 return i + 1; // Ranking mulai dari 1
             }
         }
         
+        if (debugMode) {
+            cout << "Debug - Player move " << playerMove.toString() << " not found in legal moves!" << endl;
+        }
         return allMoves.size(); // Jika tidak ditemukan, ranking terburuk
     }
     
     void analyzePlayerMove(ChessBoard& board, const Move& playerMove) {
         if (!enableMoveAnalysis) return;
         
-        // Evaluasi posisi sebelum gerakan
+        // Evaluasi posisi sebelum gerakan (dari perspektif current player)
         int scoreBefore = evaluateBoard(board);
         
-        // Buat gerakan
+        // Buat gerakan dan evaluasi posisi setelah gerakan
         ChessBoard newBoard = board;
         newBoard.makeMove(playerMove);
         
-        // Evaluasi posisi setelah gerakan
-        int scoreAfter = -evaluateBoard(newBoard); // Negative karena perspektif berubah
+        // Evaluasi posisi setelah gerakan (sekarang perspektif lawan)
+        // Jadi kita perlu negate untuk mendapat perspektif asli
+        int scoreAfter = -evaluateBoard(newBoard);
         
-        // Hitung score difference
+        // Hitung score difference (positif = bagus untuk pemain)
         int scoreDiff = scoreAfter - scoreBefore;
         
-        // Rank gerakan pemain
+        // Rank gerakan pemain dibandingkan semua gerakan legal
         int rank = rankMove(board, playerMove);
         vector<Move> allMoves = board.generateLegalMoves();
         
@@ -802,6 +834,12 @@ public:
         if (scoreDiff > 0) cout << " (+" << scoreDiff << ")";
         else if (scoreDiff < 0) cout << " (" << scoreDiff << ")";
         cout << endl;
+        
+        // Debug info
+        if (debugMode) {
+            cout << "Debug - ScoreDiff: " << scoreDiff << ", Rank: " << rank << "/" << allMoves.size() << endl;
+        }
+        
         cout << "═══════════════════════" << endl;
         
         // Update evaluasi terakhir
@@ -847,7 +885,7 @@ public:
         int materialScore = 0;
         int mobilityScore = 0;
         
-        // Material evaluation
+        // Material evaluation dari perspektif WHITE
         for (int square = 0; square < 64; square++) {
             Piece piece = board.getPiece(square);
             if (!piece.isEmpty()) {
@@ -860,14 +898,16 @@ public:
             }
         }
         
-        // Mobility bonus
+        // Mobility bonus dari perspektif current player
         vector<Move> legalMoves = board.generateLegalMoves();
         mobilityScore = legalMoves.size() * 2;
-        if (board.getCurrentPlayer() == BLACK) {
-            mobilityScore = -mobilityScore;
-        }
         
         score = materialScore + mobilityScore;
+        
+        // Kembalikan score dari perspektif current player
+        if (board.getCurrentPlayer() == BLACK) {
+            score = -score;
+        }
         
         return score;
     }
@@ -920,6 +960,7 @@ public:
                 ChessBoard newBoard = board;
                 newBoard.makeMove(move);
                 
+                // Recursive call dengan isMaximizing diflip
                 auto [eval, _] = minimax(newBoard, depth - 1, alpha, beta, false, 
                                        currentDepth + 1, move);
                 
@@ -946,6 +987,7 @@ public:
                 ChessBoard newBoard = board;
                 newBoard.makeMove(move);
                 
+                // Recursive call dengan isMaximizing diflip
                 auto [eval, _] = minimax(newBoard, depth - 1, alpha, beta, true, 
                                        currentDepth + 1, move);
                 
